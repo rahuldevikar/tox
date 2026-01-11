@@ -13,6 +13,13 @@ if TYPE_CHECKING:
     from typing import Final
 
 
+def _is_pylock_file(path_str: str) -> bool:
+    """Check if a path refers to a PEP 751 pylock.toml file."""
+    path_lower = path_str.lower()
+    # Match pylock.toml or pylock.<name>.toml
+    return path_lower == "pylock.toml" or (path_lower.startswith("pylock.") and path_lower.endswith(".toml"))
+
+
 class PythonDeps(RequirementsFile):
     # these options are valid in requirements.txt, but not via pip cli and
     # thus cannot be used in the testenv `deps` list
@@ -42,10 +49,28 @@ class PythonDeps(RequirementsFile):
     @property
     def _req_parser(self) -> RequirementsFile:
         if self._req_parser_ is None:
-            self._req_parser_ = RequirementsFile(path=self._path, constraint=False)
+            # Create a custom RequirementsFile that can handle pylock files
+            self._req_parser_ = _PylockAwareRequirementsFile(path=self._path, constraint=False)
         return self._req_parser_
 
     def _get_file_content(self, url: str) -> str:
+        # Check if this is a pylock.toml file
+        from pathlib import Path as PathLib  # noqa: PLC0415
+        
+        url_path = PathLib(url) if not url.startswith(("http://", "https://", "file://")) else None
+        if url_path and _is_pylock_file(url_path.name):
+            # This is a pylock.toml file - convert it to requirements format
+            from .pylock import PylockFile  # noqa: PLC0415
+            
+            try:
+                pylock = PylockFile(url_path)
+                lock_requirements = pylock.get_requirements()
+                # Convert to requirements.txt format (one requirement per line)
+                return "\n".join(str(req) for req in lock_requirements)
+            except Exception:  # noqa: BLE001
+                # If parsing fails, fall through to normal file handling
+                pass
+        
         if self._is_url_self(url):
             return self._raw
         return super()._get_file_content(url)
@@ -109,6 +134,59 @@ class PythonDeps(RequirementsFile):
                     msg = f"Cannot use --{illegal_option} in deps list, it must be in requirements file. ({req})"
                     raise ValueError(msg)
         return requirements
+
+    @property
+    def as_root_args(self) -> list[str]:
+        """
+        Override to handle pylock.toml files properly.
+        
+        Instead of returning -r pylock.toml, we expand it to individual requirements.
+        """
+        from argparse import Namespace  # noqa: PLC0415
+        
+        # Use recurse=True to actually parse the files
+        opt = Namespace()
+        result: list[str] = []
+        
+        # Parse requirements with recursion to expand pylock files
+        for req in self._parse_requirements(opt=opt, recurse=True):
+            result.extend(req.as_args())
+        
+        # Process options but filter out pylock.toml references
+        option_args = self._option_to_args_filtered(opt)
+        result.extend(option_args)
+        
+        return result
+    
+    def _option_to_args_filtered(self, opt: Namespace) -> list[str]:
+        """Like _option_to_args but filters out pylock.toml files (already expanded)."""
+        result: list[str] = []
+        from pathlib import Path as PathLib  # noqa: PLC0415
+        
+        # Filter requirements - exclude pylock files as they're already expanded
+        for req in getattr(opt, "requirements", []):
+            req_path = PathLib(req)
+            if not _is_pylock_file(req_path.name):
+                result.extend(("-r", req))
+        
+        # Constraints are passed as-is (pylock files won't be in constraints)
+        for req in getattr(opt, "constraints", []):
+            result.extend(("-c", req))
+        
+        # Other options from parent
+        parent_args = self._req_parser._option_to_args(opt)  # noqa: SLF001
+        # Filter out any -r/-c we already handled
+        i = 0
+        while i < len(parent_args):
+            arg = parent_args[i]
+            if arg in ("-r", "-c") and i + 1 < len(parent_args):
+                # Skip this pair, we already handled it
+                i += 2
+            else:
+                result.append(arg)
+                i += 1
+        
+        return result
 
     def unroll(self) -> tuple[list[str], list[str]]:
         if self._unroll is None:
@@ -243,6 +321,30 @@ class PythonConstraints(RequirementsFile):
         ):
             raise TypeError(raw)
         return cls(raw, root)
+
+
+class _PylockAwareRequirementsFile(RequirementsFile):
+    """A RequirementsFile subclass that can intercept and convert pylock.toml files."""
+    
+    def _get_file_content(self, url: str) -> str:
+        # Check if this is a pylock.toml file
+        from pathlib import Path as PathLib  # noqa: PLC0415
+        
+        url_path = PathLib(url) if not url.startswith(("http://", "https://", "file://")) else None
+        if url_path and _is_pylock_file(url_path.name):
+            # This is a pylock.toml file - convert it to requirements format
+            from .pylock import PylockFile  # noqa: PLC0415
+            
+            try:
+                pylock = PylockFile(url_path)
+                lock_requirements = pylock.get_requirements()
+                # Convert to requirements.txt format (one requirement per line)
+                return "\n".join(str(req) for req in lock_requirements)
+            except Exception:  # noqa: BLE001
+                # If parsing fails, fall through to normal file handling
+                pass
+        
+        return super()._get_file_content(url)
 
 
 ONE_ARG = {
