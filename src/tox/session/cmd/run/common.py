@@ -366,6 +366,9 @@ def run_order(state: State, to_run: list[str]) -> tuple[list[str], dict[str, set
     for env in to_run:
         run_env = cast("RunToxEnv", state.envs[env])
         depends = set(cast("EnvList", run_env.conf["depends"]).envs)
+        # Filter out self-dependencies to prevent circular dependencies
+        # (e.g., when depends is set in env_run_base, lint shouldn't depend on itself)
+        depends.discard(env)
         todo[env] = to_run_set & depends
     order = stable_topological_sort(todo)
     return order, todo
