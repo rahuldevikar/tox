@@ -413,6 +413,7 @@ def test_config_set_env_ref(tox_project: ToxProjectCreator) -> None:
         "  C=3\n"
         "  D=4\n"
         "  PIP_DISABLE_PIP_VERSION_CHECK=1\n"
+        "  PIP_USER=0\n"
         "  PYTHONHASHSEED=1\n"
         "  PYTHONIOENCODING=utf-8\n"
     )

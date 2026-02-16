@@ -88,9 +88,9 @@ def eval_set_env(tox_project: ToxProjectCreator) -> EvalSetEnv:
 def test_set_env_default(eval_set_env: EvalSetEnv) -> None:
     set_env = eval_set_env("")
     keys = list(set_env)
-    assert keys == ["PYTHONHASHSEED", "PIP_DISABLE_PIP_VERSION_CHECK", "PYTHONIOENCODING"]
+    assert keys == ["PYTHONHASHSEED", "PIP_DISABLE_PIP_VERSION_CHECK", "PIP_USER", "PYTHONIOENCODING"]
     values = [set_env.load(k) for k in keys]
-    assert values == [ANY, "1", "utf-8"]
+    assert values == [ANY, "1", "0", "utf-8"]
 
 
 def test_set_env_self_key(eval_set_env: EvalSetEnv, monkeypatch: MonkeyPatch) -> None:
@@ -150,6 +150,7 @@ def test_set_env_replacer(eval_set_env: EvalSetEnv, monkeypatch: MonkeyPatch) ->
     env = {k: set_env.load(k) for k in set_env}
     assert env == {
         "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+        "PIP_USER": "0",
         "a": "1",
         "b": "2",
         "PYTHONIOENCODING": "utf-8",
@@ -160,6 +161,11 @@ def test_set_env_replacer(eval_set_env: EvalSetEnv, monkeypatch: MonkeyPatch) ->
 def test_set_env_honor_override(eval_set_env: EvalSetEnv) -> None:
     set_env = eval_set_env("[testenv]\npackage=skip\nset_env=PIP_DISABLE_PIP_VERSION_CHECK=0")
     assert set_env.load("PIP_DISABLE_PIP_VERSION_CHECK") == "0"
+
+
+def test_set_env_pip_user_override(eval_set_env: EvalSetEnv) -> None:
+    set_env = eval_set_env("[testenv]\npackage=skip\nset_env=PIP_USER=1")
+    assert set_env.load("PIP_USER") == "1"
 
 
 @pytest.mark.parametrize(
@@ -191,6 +197,7 @@ def test_set_env_environment_file(
     content = {k: set_env.load(k) for k in set_env}
     assert content == {
         "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+        "PIP_USER": "0",
         "PYTHONHASHSEED": ANY,
         "A": "1",
         "B": "2",
@@ -230,6 +237,7 @@ def test_set_env_environment_file_combined_with_normal_setting(
     content = {k: set_env.load(k) for k in set_env}
     assert content == {
         "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+        "PIP_USER": "0",
         "PYTHONHASHSEED": ANY,
         "A": "1",
         "X": "y",
@@ -280,6 +288,7 @@ def test_set_env_environment_with_file_and_expanded_substitution(
     content = {k: set_env.load(k) for k in set_env}
     assert content == {
         "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+        "PIP_USER": "0",
         "PYTHONHASHSEED": ANY,
         "PYTHONIOENCODING": "utf-8",
         "PRECENDENCE_TEST_1": "1_expanded_precedence",

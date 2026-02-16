@@ -103,6 +103,7 @@ class VirtualEnv(Python, ABC):
     def _default_set_env(self) -> dict[str, str]:
         env = super()._default_set_env()
         env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+        env["PIP_USER"] = "0"
         return env
 
     @property
