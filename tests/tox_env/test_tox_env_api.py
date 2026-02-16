@@ -174,3 +174,13 @@ def test_change_dir_is_relative_to_conf(tox_project: ToxProjectCreator) -> None:
     result.assert_success()
     lines = result.out.splitlines()
     assert lines[1] == f"change_dir = {prj.path / 'a'}"
+
+
+def test_cachedir_tag_in_work_dir(tox_project: ToxProjectCreator) -> None:
+    prj = tox_project({"tox.ini": "[testenv]\npackage=skip\ncommands=python --version"})
+    result = prj.run("r")
+    result.assert_success()
+    tag = prj.path / ".tox" / "CACHEDIR.TAG"
+    assert tag.is_file()
+    content = tag.read_text(encoding="utf-8")
+    assert content.startswith("Signature: 8a477f597d28d172789f06886806bc55")

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, cast
 from tox.execute.request import ExecuteRequest
 from tox.tox_env.errors import Fail, Recreate, Skip
 from tox.tox_env.info import Info
-from tox.util.path import ensure_empty_dir
+from tox.util.path import ensure_cachedir_tag, ensure_empty_dir
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -340,6 +340,7 @@ class ToxEnv(ABC):
                 raise Recreate(msg)
         self._handle_env_tmp_dir()
         self._handle_core_tmp_dir()
+        ensure_cachedir_tag(cast("Path", self.core["work_dir"]))
 
     def _setup_with_env(self) -> None:  # noqa: B027 # empty abstract base class
         pass

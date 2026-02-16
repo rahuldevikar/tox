@@ -1,0 +1,2 @@
+Place a ``CACHEDIR.TAG`` file inside the tox work directory (``.tox``) so backup tools can automatically skip it — by
+:user:`rahuldevikar`.
