@@ -78,6 +78,8 @@ class Plugin:
         for plugin in internal_plugins:
             self.manager.register(plugin)
         self.manager.register(state)
+
+    def check_pending(self) -> None:
         self.manager.check_pending()
 
     def _load_external_plugins(self) -> None:

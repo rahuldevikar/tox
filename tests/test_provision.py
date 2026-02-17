@@ -305,3 +305,56 @@ def test_provision_install_pkg_pep517(
     project = tox_project({"tox.ini": tox_ini}, base=example)
     result = project.run("r", "-e", "py", "--installpkg", str(sdist), "--notest", "--no-list-dependencies")
     result.assert_success()
+
+
+@pytest.mark.plugin_test
+def test_toxfile_unknown_hook_with_minversion_triggers_provision(tox_project: ToxProjectCreator) -> None:
+    """A toxfile with an unknown hook should trigger provisioning when minversion requires it (#3593)."""
+
+    def plugin() -> None:  # pragma: no cover # the code is copied to a python file
+        from tox.plugin import impl  # noqa: PLC0415
+
+        @impl
+        def tox_some_future_hook() -> None:
+            pass
+
+    ini = "[tox]\nminversion = 99.0\nskipsdist=true"
+    outcome = tox_project({"tox.ini": ini, "toxfile.py": plugin}).run("c", "-e", "py", "--no-provision")
+    outcome.assert_failed()
+    assert f"provisioning explicitly disabled within {sys.executable}" in outcome.out
+    assert "is missing" in outcome.out
+
+
+@pytest.mark.plugin_test
+def test_toxfile_unknown_hook_with_requires_triggers_provision(tox_project: ToxProjectCreator) -> None:
+    """A toxfile with an unknown hook should trigger provisioning when requires needs it (#3593)."""
+
+    def plugin() -> None:  # pragma: no cover # the code is copied to a python file
+        from tox.plugin import impl  # noqa: PLC0415
+
+        @impl
+        def tox_some_future_hook() -> None:
+            pass
+
+    ini = "[tox]\nrequires = tox>=99.0\nskipsdist=true"
+    outcome = tox_project({"tox.ini": ini, "toxfile.py": plugin}).run("c", "-e", "py", "--no-provision")
+    outcome.assert_failed()
+    assert f"provisioning explicitly disabled within {sys.executable}" in outcome.out
+    assert "is missing" in outcome.out
+
+
+@pytest.mark.plugin_test
+def test_toxfile_unknown_hook_without_provision_fails(tox_project: ToxProjectCreator) -> None:
+    """A toxfile with an unknown hook still fails when no provisioning is configured (#3593)."""
+    import pluggy  # noqa: PLC0415
+
+    def plugin() -> None:  # pragma: no cover # the code is copied to a python file
+        from tox.plugin import impl  # noqa: PLC0415
+
+        @impl
+        def tox_some_future_hook() -> None:
+            pass
+
+    ini = "[tox]\nskipsdist=true"
+    with pytest.raises(pluggy.PluginValidationError, match="unknown hook 'tox_some_future_hook'"):
+        tox_project({"tox.ini": ini, "toxfile.py": plugin}).run("c", "-e", "py")

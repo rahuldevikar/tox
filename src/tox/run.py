@@ -45,6 +45,9 @@ def main(args: Sequence[str]) -> int:
     result = provision(state)
     if result is not False:
         return result
+    from tox.plugin.manager import MANAGER  # noqa: PLC0415
+
+    MANAGER.check_pending()  # validate plugin hooks now that we know provisioning is not needed
     handler = state._options.cmd_handlers[state.conf.options.command]  # noqa: SLF001
     return handler(state)
 
