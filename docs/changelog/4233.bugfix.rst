@@ -1,0 +1,3 @@
+A PEP 723 inline script ``dependencies`` entry is now validated as a PEP 508 requirement (and ``requires-python`` as a
+version specifier), so a malformed entry fails as invalid script metadata instead of reaching pip as a requirements-file
+option or as an environment variable reference.

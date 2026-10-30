@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, cast
 
+from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
@@ -38,6 +39,7 @@ _SCRIPT_METADATA_RE: Final = re.compile(
     """,
     re.VERBOSE,
 )
+_ENV_VAR_RE: Final = re.compile(r"\$\{[A-Z0-9_]+\}")  # what the requirements file parser expands from os.environ
 _MAX_SCRIPT_BYTES: Final[int] = 5 * 1024 * 1024  # 5 MiB; PEP 723 metadata blocks are tiny in practice
 
 
@@ -119,7 +121,7 @@ class Pep723Mixin(Python, RunToxEnv):
             try:
                 # utf-8-sig: a BOM would otherwise hide a metadata block starting on the first line
                 self._script_metadata = _parse_script_metadata(full_path.read_text(encoding="utf-8-sig"))
-            except ValueError as exc:  # config error, not a tox defect - includes TOMLDecodeError
+            except (TypeError, ValueError) as exc:  # config error, not a tox defect - includes TOMLDecodeError
                 msg = f"invalid inline script metadata in {full_path}: {exc}"
                 raise Fail(msg) from exc
         return self._script_metadata
@@ -162,10 +164,37 @@ def _parse_script_metadata(script: str) -> ScriptMetadata:
         line[2:] if len(line) > 1 and line[1] == " " else line[1:] for line in content.splitlines(keepends=True)
     )
     metadata = tomllib.loads(stripped)
-    return ScriptMetadata(
-        requires_python=metadata.get("requires-python"),
-        dependencies=metadata.get("dependencies", []),
-    )
+    requires_python = metadata.get("requires-python")
+    if requires_python is not None:
+        if not isinstance(requires_python, str):
+            msg = f"requires-python must be a string, got {type(requires_python).__name__}"
+            raise TypeError(msg)
+        SpecifierSet(requires_python)  # raises InvalidSpecifier (a ValueError) when malformed
+    return ScriptMetadata(requires_python=requires_python, dependencies=_validate_dependencies(metadata))
+
+
+def _validate_dependencies(metadata: dict[str, object]) -> list[str]:
+    # entries are PEP 508 requirements, never requirements-file lines: reject anything pip would read as an option or
+    # expand from the environment
+    dependencies = metadata.get("dependencies", [])
+    if not isinstance(dependencies, list):
+        msg = f"dependencies must be a list of strings, got {type(dependencies).__name__}"
+        raise TypeError(msg)
+    result: list[str] = []
+    for dependency in dependencies:
+        if not isinstance(dependency, str):
+            msg = f"dependency {dependency!r} must be a string"
+            raise TypeError(msg)
+        try:
+            Requirement(dependency)
+        except InvalidRequirement as exc:
+            msg = f"dependency {dependency!r} is not a valid PEP 508 requirement: {exc}"
+            raise ValueError(msg) from exc
+        if _ENV_VAR_RE.search(dependency):
+            msg = f"dependency {dependency!r} must not contain an environment variable reference"
+            raise ValueError(msg)
+        result.append(dependency)
+    return result
 
 
 __all__ = [

