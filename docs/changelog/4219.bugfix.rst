@@ -1,0 +1,3 @@
+A file name matched by a TOML ``{ replace = "glob" }`` table in ``set_env`` is now passed literally: braces in the
+matched name, such as ``dist/{env:SECRET}.whl``, are no longer parsed as a substitution, matching the ``commands`` form
+of the same table.

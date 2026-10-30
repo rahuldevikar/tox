@@ -643,6 +643,25 @@ def test_config_in_toml_replace_glob_in_set_env_substitutes_pattern(
     assert f"G={tmp_path / 'p' / 'sub' / 'a.txt'}\n" in outcome.out
 
 
+def test_config_in_toml_replace_glob_in_set_env_keeps_file_name_literal(
+    tox_project: ToxProjectCreator, tmp_path: Path
+) -> None:
+    (tmp_path / "p" / "dist").mkdir(parents=True)
+    (tmp_path / "p" / "dist" / "a{env_name}.whl").touch()
+    project = tox_project({
+        "pyproject.toml": dedent("""
+        [tool.tox.env.A]
+        set_env = { WHEEL = { replace = "glob", pattern = "dist/*.whl" } }
+        commands = [["echo", { replace = "glob", pattern = "dist/*.whl", extend = true }]]
+        """),
+    })
+    outcome = project.run("c", "-e", "A", "-k", "set_env", "commands")
+    outcome.assert_success()
+    wheel = tmp_path / "p" / "dist" / "a{env_name}.whl"
+    assert f"WHEEL={wheel}\n" in outcome.out
+    assert f"echo {wheel}\n" in outcome.out
+
+
 @pytest.mark.parametrize(
     ("env_vars", "condition", "then", "else_val", "expected"),
     [
